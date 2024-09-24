@@ -6,9 +6,15 @@ import threading
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QPixmap
+
 from icoextract import IconExtractor, IconExtractorError
+
+from io import BytesIO
+
 from PIL import Image
+
 from itertools import compress
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -16,19 +22,21 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Touhou Launcher")
         self.setGeometry(QRect(0, 0, 1000, 540))
         
-        self.layout = QGridLayout()
-        widget = QWidget()
-        widget.setLayout(self.layout)
-        self.setCentralWidget(widget)
+        layout = QGridLayout()
+        # TODO: make the scroll work
+        self.widget = QScrollArea()
+        self.widget.setLayout(layout)
+        self.widget.setWidgetResizable(False)
+        self.setCentralWidget(self.widget)
 
     def addWidget(self, widget, x, y):
-        self.layout.addWidget(widget, x, y)
+        self.widget.layout().addWidget(widget, x, y)
 
 def filterFolder(input_text):
     pattern = re.compile(r"[A-Za-z]+ [0-9]+", re.IGNORECASE)
     return bool(re.search(pattern, input_text))
 
-def findExe(folder, number):
+def findExe(folder):
     pattern = re.compile(r"^(Touhou|th|game)([0-9]*)?\.exe", re.IGNORECASE)
     
     for file in next(iter(os.walk(folder)))[2]:
@@ -36,22 +44,31 @@ def findExe(folder, number):
             return file
     return FileNotFoundError
 
-def fetchImage(url):
-    img_data = bytearray(open("NoImageFound.png"), "rb")
-    
-    for format in [".jpg", ".png"]:
-        r=requests.get(
-            url+format, 
-            headers={'User-agent': 'Mozilla/5.0'}, 
-        )
-        if r.status_code == 200: 
-            img_data = r.content
-            break
-        
-    return img_data
+def fetchImage(number):
+    img = None
+    for format in [".png", ".jpg"]:
+        for typeImg in ["cover", "front"]:
+            r=requests.get(
+                f"https://en.touhouwiki.net/wiki/Special:Redirect/file/Th{number}{typeImg}{format}", 
+                headers={'User-agent': 'Mozilla/5.0'}, 
+            )
+            if r.status_code == 200: 
+                if img != None:
+                    # download the image that is closed to a square
+                    tmp = Image.open(BytesIO(r.content)) 
+                    tmp_ratio = abs(1 - tmp.size[0]/tmp.size[1])
+                    img_ratio = abs(1 - img.size[0]/img.size[1])
 
-if __name__ = "__main__":
-    path = "C:\Touhou"
+                    if img_ratio > tmp_ratio:
+                        img = tmp
+                    continue
+
+                img = Image.open(BytesIO(r.content))
+                
+    img.save(f"img/th{number}.png")
+
+if __name__ == "__main__":
+    path = "D:\\Program Files\\Touhou\\Games"
     # TODO: make the user input this path
 
     # get every folders (games) in the path 
@@ -82,7 +99,7 @@ if __name__ = "__main__":
         # find the exe
         location = ""
         try :
-            exeName = findExe(f"{path}/{key}", temp_number)
+            exeName = findExe(f"{path}/{key}")
             value["location"] = f"{path}/{key}/{exeName}"
         except FileNotFoundError:
             value["location"] = "FileNotFound"
@@ -115,23 +132,24 @@ if __name__ = "__main__":
     window = MainWindow()
 
     for index, (key, value) in enumerate(games.items()):
+        print(key)
         # button to launch the game
         # TODO: launch exe
-        button = QPushButton(window)
+        button = QPushButton()
         button.setText("Launch Game")
         
         # image of the game cover
-        img_label = QLabel(window)
-        img = QPixmap()
+        img_label = QLabel()
+       
 
         url = value["img"]
-
-        img_data = fetchImage(url)
-
-        img.loadFromData(img_data)
+        image_name = f"th{value['number']}.png"
+        if not (image_name in os.listdir("img/")):
+            fetchImage(value['number'])
+        img = QPixmap(f"img/{image_name}")
         img_label.setPixmap(img)
-        img_label.resize(img.width(), img.height())
-        
+        # TODO: make the images responsive
+
         # add the widgets to the window
         window.addWidget(img_label, index, 0)
         window.addWidget(button, index, 1)
@@ -146,3 +164,5 @@ if __name__ = "__main__":
 
 
     # reopen the window once the game is closed
+
+# TODO: use thread for the image download
