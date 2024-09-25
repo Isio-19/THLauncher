@@ -68,7 +68,7 @@ def fetchImage(number):
     img.save(f"img/th{number}.png")
 
 if __name__ == "__main__":
-    path = "D:\\Program Files\\Touhou\\Games"
+    path = "C:\\Touhou"
     # TODO: make the user input this path
 
     # get every folders (games) in the path 
@@ -122,6 +122,22 @@ if __name__ == "__main__":
         except IconExtractorError:
             pass
         
+    threads = []
+    for key, value in games.items():
+        image_name = f"th{value['number']}.png"
+        if not (image_name in os.listdir("img/")):
+            threads.append(
+                threading.Thread(
+                    target=fetchImage,
+                    args=(value["number"],)
+                )
+            )
+    
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+                
     # launch a window that let's you choose the game
         # show icon
         # show game title
@@ -140,12 +156,9 @@ if __name__ == "__main__":
         
         # image of the game cover
         img_label = QLabel()
-       
 
         url = value["img"]
         image_name = f"th{value['number']}.png"
-        if not (image_name in os.listdir("img/")):
-            fetchImage(value['number'])
         img = QPixmap(f"img/{image_name}")
         img_label.setPixmap(img)
         # TODO: make the images responsive
@@ -164,5 +177,3 @@ if __name__ == "__main__":
 
 
     # reopen the window once the game is closed
-
-# TODO: use thread for the image download
